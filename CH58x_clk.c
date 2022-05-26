@@ -44,6 +44,7 @@ void LClk32K_Select(LClk32KTypeDef hc)
  *
  * @return  none
  */
+__HIGH_CODE
 void HSECFG_Current(HSECurrentTypeDef c)
 {
     uint8_t x32M_c;
