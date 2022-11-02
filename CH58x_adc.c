@@ -24,14 +24,11 @@ signed short ADC_DataCalib_Rough(void) // 采样数据粗调,获取偏差值
     uint16_t i;
     uint32_t sum = 0;
     uint8_t  ch = 0;   // 备份通道
-    uint8_t  ctrl = 0; // 备份控制寄存器
 
     ch = R8_ADC_CHANNEL;
-    ctrl = R8_ADC_CFG;
-    R8_ADC_CFG = 0;
 
     ADC_ChannelCfg(1);                                          // ADC校准通道请选择通道1
-    R8_ADC_CFG |= RB_ADC_OFS_TEST | RB_ADC_POWER_ON | (2 << 4); // 进入测试模式
+    R8_ADC_CFG |= RB_ADC_OFS_TEST; // 进入测试模式
     R8_ADC_CONVERT = RB_ADC_START;
     while(R8_ADC_CONVERT & RB_ADC_START);
     for(i = 0; i < 16; i++)
@@ -44,7 +41,7 @@ signed short ADC_DataCalib_Rough(void) // 采样数据粗调,获取偏差值
     R8_ADC_CFG &= ~RB_ADC_OFS_TEST; // 关闭测试模式
 
     R8_ADC_CHANNEL = ch;
-    R8_ADC_CFG = ctrl;
+
     return (2048 - sum);
 }
 
@@ -94,7 +91,7 @@ void ADC_InterTSSampInit(void)
     R8_TKEY_CFG &= ~RB_TKEY_PWR_ON;
     R8_TEM_SENSOR = RB_TEM_SEN_PWR_ON;
     R8_ADC_CHANNEL = CH_INTE_VTEMP;
-    R8_ADC_CFG = RB_ADC_BUF_EN | RB_ADC_POWER_ON | RB_ADC_DIFF_EN | (3 << 4);
+    R8_ADC_CFG = RB_ADC_POWER_ON | RB_ADC_DIFF_EN | (3 << 4);
 }
 
 /*********************************************************************
@@ -193,7 +190,7 @@ void ADC_DMACfg(uint8_t s, uint16_t startAddr, uint16_t endAddr, ADC_DMAModeType
 {
     if(s == DISABLE)
     {
-        R8_ADC_CTRL_DMA &= ~RB_ADC_DMA_ENABLE;
+        R8_ADC_CTRL_DMA &= ~(RB_ADC_DMA_ENABLE | RB_ADC_IE_DMA_END);
     }
     else
     {
@@ -212,21 +209,25 @@ void ADC_DMACfg(uint8_t s, uint16_t startAddr, uint16_t endAddr, ADC_DMAModeType
 }
 
 /*********************************************************************
- * @fn      ADC_GetCurrentTS
+ * @fn      adc_to_temperature_celsius
  *
- * @brief   获取当前采样的温度值（℃）
+ * @brief   Convert ADC value to temperature(Celsius)
  *
- * @param   ts_v    - 当前温度传感器采样输出
+ * @param   adc_val - adc value
  *
- * @return  转换后的温度值（℃）
+ * @return  temperature (Celsius)
  */
-int ADC_GetCurrentTS(uint16_t ts_v)
+
+int adc_to_temperature_celsius(uint16_t adc_val)
 {
-    uint32_t C25;
-    int cal;
+    uint32_t C25 = 0;
+    int      temp;
 
     C25 = (*((PUINT32)ROM_CFG_TMP_25C));
-    cal = (ts_v * 2100) >> 12;
-    cal = (((C25 >> 16) & 0xFFFF) ? ((C25 >> 16) & 0xFFFF) : 25) + ((cal - ((int)(C25 & 0xFFFF) - 1050 / 2) * 2) * 10 / 14);
-    return (cal);
+
+    /* current temperature = standard temperature + (adc deviation * adc linearity coefficient) */ 
+    temp = (((C25 >> 16) & 0xFFFF) ? ((C25 >> 16) & 0xFFFF) : 25) + \
+        (adc_val - ((int)(C25 & 0xFFFF))) * 10 / 27; 
+
+    return (temp);
 }
